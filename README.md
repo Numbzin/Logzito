@@ -26,7 +26,7 @@ Ideal para comunidades de **estudo, desenvolvimento, produtividade ou bem-estar*
 - 🤝 **Compartilhamento Seletivo:** Escolha quais entradas compartilhar com a comunidade.
 - 💬 **Interação Social:** Comente e reaja às entradas compartilhadas.
 - 🏷️ **Organização com Tags:** Categorize suas entradas e filtre-as facilmente.
-- 🔗 **Suporte a Mídia:** Anexe links, imagens e vídeos.
+- 🔗 **Suporte a Mídia:** Anexe links, imagens e gifs.
 - ⏰ **Lembretes Personalizados:** Crie lembretes diários via DM com fusos horários customizados.
 - 📅 **Calendário Visual:** Acompanhe sua frequência de escrita.
 - 📊 **Gráfico de Atividade:** Visualize seu progresso com um gráfico de atividade.
