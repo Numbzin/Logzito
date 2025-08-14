@@ -2,6 +2,19 @@ const cron = require("node-cron");
 const { supabase } = require("../supabaseClient");
 const { DateTime } = require("luxon");
 
+const MENSAGENS_LEMBRETE_GENERICO = [
+  "🔔 É hora de registrar sua atividade! Como foi seu dia?",
+  "📝 Lembrete diário: não se esqueça de adicionar sua entrada no Logzito!",
+  "🤔 Ei, como vão as coisas? Hora de registrar seu progresso.",
+  "🏆 Um pequeno lembrete para você registrar suas conquistas de hoje!",
+  "💻 Que tal reservar um momento para o seu diário de dev?",
+  "💡 Uma ideia surgiu? Anote no seu Logzito antes que escape!",
+  "✨ Psst... seu diário de dev está esperando por uma nova entrada.",
+  "🚀 Registre seu progresso de hoje e veja o quão longe você chegou!",
+  "📅 Mais um dia, mais um passo na sua jornada. Hora de registrar!",
+  "🧠 Fez algo que valha a pena lembrar? Anote no Logzito!"
+];
+
 async function enviarLembrete(client, userId, message) {
   try {
     const user = await client.users.fetch(userId);
@@ -54,7 +67,8 @@ async function verificarEEnviarLembretes(client) {
 
       // Compara apenas a hora e o minuto
       if (proximoEnvioLocal.hour === agoraNoFuso.hour && proximoEnvioLocal.minute === agoraNoFuso.minute) {
-        await enviarLembrete(client, usuario.usuario_id, "É hora de registrar sua atividade!");
+        const mensagem = MENSAGENS_LEMBRETE_GENERICO[Math.floor(Math.random() * MENSAGENS_LEMBRETE_GENERICO.length)];
+        await enviarLembrete(client, usuario.usuario_id, mensagem);
       }
     } catch (err) {
       console.error(
