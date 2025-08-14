@@ -209,19 +209,27 @@ module.exports = {
           });
         }
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("usuarios_logzito")
-          .update({
+          .upsert({
+            usuario_id: userId,
             lembrete_ativo: ativar,
             lembrete_horario: horario,
             lembrete_fuso: fuso,
           })
-          .eq("usuario_id", userId);
+          .select();
 
         if (error) {
           console.error("Erro ao atualizar lembrete:", error);
           return interaction.editReply({
-            content: "❌ Ocorreu um erro ao salvar sua preferência.",
+            content: `❌ Ocorreu um erro ao salvar sua preferência: ${error.message}`,
+          });
+        }
+
+        if (!data || data.length === 0) {
+          console.error("Falha silenciosa ao atualizar lembrete: nenhuma linha atualizada.");
+          return interaction.editReply({
+              content: "❌ Falha ao salvar sua preferência. Verifique as permissões (RLS) da tabela 'usuarios_logzito'. Nenhuma linha foi atualizada.",
           });
         }
 

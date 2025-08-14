@@ -2,35 +2,25 @@ const cron = require("node-cron");
 const { supabase } = require("../supabaseClient");
 const { DateTime } = require("luxon");
 
-const MENSAGENS_LEMBRETE_GENERICO = [
-  "📚 Já anotou o que aprendeu hoje? O progresso vem com a prática!",
-  "🧠 Que tal refletir sobre sua evolução hoje? Use `/registro adicionar`",
-  "🚀 Cada linha de código conta. Registra aí no Logzito!",
-  "📓 Diário de bordo aberto! Compartilhe sua jornada dev 📝",
-  "💡 Teve alguma ideia ou sacada hoje? Não deixa escapar!",
-  "🤖 O Logzito tá de olho! Que tal registrar seu avanço?",
-  "🌱 Até uma linha por dia faz diferença. Vai lá!",
-  "🔎 Aprender é repetir, registrar e revisar. Hora do log!",
-  "✍️ Bora colocar no papel digital o que você mandou bem hoje?",
-  "📢 O futuro você vai te agradecer por manter um diário hoje.",
-];
-
-async function enviarLembrete(client, usuarioId, mensagem) {
+async function enviarLembrete(client, userId, message) {
   try {
-    const user = await client.users.fetch(usuarioId);
-    await user.send(`🔔 ${mensagem}`);
+    const user = await client.users.fetch(userId);
+    await user.send(`🔔 ${message}`);
     return true;
   } catch (err) {
-    console.error(`Erro ao enviar lembrete para ${usuarioId}:`, err.message);
+    console.error(
+      `Erro ao enviar lembrete para ${userId}:`,
+      err.message
+    );
+    // Se o usuário não for encontrado ou bloqueou o bot, desativa o lembrete
     if (err.code === 10007 || err.code === 50007) {
-      // Unknown User or Cannot send messages to this user
       console.log(
-        `Desativando lembretes para o usuário ${usuarioId} por falha no envio.`
+        `Desativando lembrete para ${userId} por falha no envio.`
       );
       await supabase
         .from("usuarios_logzito")
         .update({ lembrete_ativo: false })
-        .eq("usuario_id", usuarioId);
+        .eq("usuario_id", userId);
     }
     return false;
   }
@@ -39,56 +29,38 @@ async function enviarLembrete(client, usuarioId, mensagem) {
 async function verificarEEnviarLembretes(client) {
   const agoraUTC = DateTime.utc();
 
+  // Busca todos os usuários com lembretes ativos
   const { data: usuarios, error } = await supabase
     .from("usuarios_logzito")
-    .select("usuario_id, lembrete_horario, lembrete_fuso, lembrete_last_sent")
+    .select("usuario_id, lembrete_horario, lembrete_fuso")
     .eq("lembrete_ativo", true);
 
   if (error) {
-    console.error("Erro ao buscar usuários para lembretes:", error);
+    console.error("Erro ao buscar usuários com lembretes:", error);
     return;
   }
 
-  if (!usuarios || usuarios.length === 0) return;
+  if (!usuarios || usuarios.length === 0) {
+    return;
+  }
 
   for (const usuario of usuarios) {
-    const { usuario_id, lembrete_horario, lembrete_fuso, lembrete_last_sent } =
-      usuario;
-    if (!lembrete_horario) continue;
-
     try {
-      const fuso = lembrete_fuso || "America/Sao_Paulo";
-      const horaAgendada = DateTime.fromFormat(lembrete_horario, "HH:mm", {
-        zone: fuso,
+      const proximoEnvioLocal = DateTime.fromFormat(usuario.lembrete_horario, "HH:mm", {
+        zone: usuario.lembrete_fuso,
       });
-      const agoraNoFuso = agoraUTC.setZone(fuso);
 
-      const ultimaVezEnviado = lembrete_last_sent
-        ? DateTime.fromISO(lembrete_last_sent).setZone(fuso)
-        : null;
+      const agoraNoFuso = agoraUTC.setZone(usuario.lembrete_fuso);
 
-      // Verifica se a hora atual é a hora agendada e se já não foi enviado hoje
-      if (
-        agoraNoFuso.hour === horaAgendada.hour &&
-        agoraNoFuso.minute === horaAgendada.minute &&
-        (!ultimaVezEnviado ||
-          ultimaVezEnviado.startOf("day") < agoraNoFuso.startOf("day"))
-      ) {
-        const frase =
-          MENSAGENS_LEMBRETE_GENERICO[
-            Math.floor(Math.random() * MENSAGENS_LEMBRETE_GENERICO.length)
-          ];
-        const sucesso = await enviarLembrete(client, usuario_id, frase);
-
-        if (sucesso) {
-          await supabase
-            .from("usuarios_logzito")
-            .update({ lembrete_last_sent: agoraUTC.toISO() })
-            .eq("usuario_id", usuario_id);
-        }
+      // Compara apenas a hora e o minuto
+      if (proximoEnvioLocal.hour === agoraNoFuso.hour && proximoEnvioLocal.minute === agoraNoFuso.minute) {
+        await enviarLembrete(client, usuario.usuario_id, "É hora de registrar sua atividade!");
       }
     } catch (err) {
-      console.error(`Erro ao processar lembrete para ${usuario_id}:`, err);
+      console.error(
+        `Erro ao processar lembrete para usuário ${usuario.usuario_id}:`,
+        err
+      );
     }
   }
 }

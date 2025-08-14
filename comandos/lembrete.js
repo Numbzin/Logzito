@@ -64,7 +64,7 @@ async function handleAdicionar(interaction) {
   if (error) {
     console.error("Erro ao adicionar lembrete:", error);
     return interaction.editReply({
-      content: "❌ Ocorreu um erro ao salvar seu lembrete.",
+      content: `❌ Ocorreu um erro ao salvar seu lembrete: ${error.message}`,
     });
   }
 
