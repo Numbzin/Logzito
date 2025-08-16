@@ -14,8 +14,28 @@ async function handleAdicionarCommand(interaction) {
   const rawTags = interaction.options.getString("tags");
   const link = interaction.options.getString("link");
 
+  const tags = rawTags
+    ? rawTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t)
+    : [];
+
+  const tempEntry = {
+    titulo: null,
+    conteudo: null,
+    tags,
+    link: link || null,
+    anexo_url: null,
+  };
+
+  if (!interaction.client.tempEntries) {
+    interaction.client.tempEntries = new Map();
+  }
+  interaction.client.tempEntries.set(interaction.user.id, tempEntry);
+
   const modal = new ModalBuilder()
-    .setCustomId(`registro_adicionar_${rawTags || ""}_${link || ""}`)
+    .setCustomId(`registro_adicionar`)
     .setTitle("✍️ Diário");
 
   const tituloInput = new TextInputBuilder()
@@ -47,35 +67,38 @@ async function handleAdicionarModalSubmit(interaction) {
   const titulo = interaction.fields.getTextInputValue("titulo");
   const conteudo = interaction.fields.getTextInputValue("conteudo");
 
-  const [_, __, rawTags, link] = interaction.customId.split("_");
-  const tags = rawTags
-    ? rawTags
-        .split(",")
-        .map((t) => t.trim())
-        .filter((t) => t)
-    : [];
-
-  const tempEntry = {
-    titulo,
-    conteudo,
-    tags,
-    link,
+  const tempEntry = interaction.client.tempEntries?.get(
+    interaction.user.id
+  ) || {
+    titulo: null,
+    conteudo: null,
+    tags: [],
+    link: null,
     anexo_url: null,
   };
 
-  if (!interaction.client.tempEntries) {
-    interaction.client.tempEntries = new Map();
-  }
+  tempEntry.titulo = titulo;
+  tempEntry.conteudo = conteudo;
+
   interaction.client.tempEntries.set(interaction.user.id, tempEntry);
 
-  const preview = criarPreviewEntrada(tempEntry);
+  const preview = criarPreviewEntrada({
+    titulo: tempEntry.titulo,
+    conteudo: tempEntry.conteudo,
+    tags: tempEntry.tags,
+    link: tempEntry.link,
+    anexo_url: tempEntry.anexo_url,
+  });
+
   await interaction.editReply({ ...preview, ephemeral: true });
 }
 
 async function handleTagsModalSubmit(interaction) {
+  await interaction.deferReply({ ephemeral: true });
+
   const tempEntry = interaction.client.tempEntries?.get(interaction.user.id);
   if (!tempEntry) {
-    return await interaction.followUp({
+    return await interaction.editReply({
       content:
         "❌ Erro: Entrada temporária não encontrada. Por favor, tente novamente.",
       ephemeral: true,
@@ -92,14 +115,20 @@ async function handleTagsModalSubmit(interaction) {
   interaction.client.tempEntries.set(interaction.user.id, tempEntry);
 
   const preview = criarPreviewEntrada(tempEntry);
-  await interaction.update({ ...preview });
-  await interaction.followUp({ content: "✅ Tags adicionadas com sucesso!", ephemeral: true });
+
+  await interaction.editReply({ ...preview, ephemeral: true });
+  await interaction.followUp({
+    content: "✅ Tags adicionadas com sucesso!",
+    ephemeral: true,
+  });
 }
 
 async function handleLinkModalSubmit(interaction) {
+  await interaction.deferReply({ ephemeral: true });
+
   const tempEntry = interaction.client.tempEntries?.get(interaction.user.id);
   if (!tempEntry) {
-    return await interaction.followUp({
+    return await interaction.editReply({
       content:
         "❌ Erro: Entrada temporária não encontrada. Por favor, tente novamente.",
       ephemeral: true,
@@ -112,8 +141,12 @@ async function handleLinkModalSubmit(interaction) {
   interaction.client.tempEntries.set(interaction.user.id, tempEntry);
 
   const preview = criarPreviewEntrada(tempEntry);
-  await interaction.update({ ...preview });
-  await interaction.followUp({ content: "✅ Link adicionado com sucesso!", ephemeral: true });
+
+  await interaction.editReply({ ...preview, ephemeral: true });
+  await interaction.followUp({
+    content: "✅ Link adicionado com sucesso!",
+    ephemeral: true,
+  });
 }
 
 async function handleAdicionarTagsButton(interaction) {
@@ -173,7 +206,8 @@ async function handleAdicionarAnexoButton(interaction) {
 
   if (!collector) {
     return prompt.edit({
-      content: "❌ Não foi possível iniciar o coletor de mensagens neste canal.",
+      content:
+        "❌ Não foi possível iniciar o coletor de mensagens neste canal.",
     });
   }
 
@@ -181,7 +215,9 @@ async function handleAdicionarAnexoButton(interaction) {
     try {
       const attachment = msg.attachments.first();
       if (!attachment) {
-        await prompt.edit({ content: "❌ Nenhuma mídia enviada. Tente novamente." });
+        await prompt.edit({
+          content: "❌ Nenhuma mídia enviada. Tente novamente.",
+        });
         return;
       }
 
@@ -212,7 +248,9 @@ async function handleAdicionarAnexoButton(interaction) {
 
       if (uploadError) {
         console.error("Erro no upload:", uploadError);
-        await prompt.edit({ content: "❌ Erro ao processar o arquivo. Tente novamente." });
+        await prompt.edit({
+          content: "❌ Erro ao processar o arquivo. Tente novamente.",
+        });
         return;
       }
 
@@ -225,11 +263,14 @@ async function handleAdicionarAnexoButton(interaction) {
 
       const preview = criarPreviewEntrada(tempEntry);
 
-      await prompt.delete().catch(() => {}); // Deleta a mensagem de prompt
-      await interaction.followUp({ ...preview, ephemeral: true }); // Envia a nova pré-visualização
+      await prompt.delete().catch(() => {});
+      await interaction.followUp({ ...preview, ephemeral: true });
     } catch (err) {
       console.error("Erro no coletor de anexo:", err);
-      await interaction.followUp({ content: "❌ Ocorreu um erro ao processar seu arquivo.", ephemeral: true });
+      await interaction.followUp({
+        content: "❌ Ocorreu um erro ao processar seu arquivo.",
+        ephemeral: true,
+      });
     } finally {
       await msg.delete().catch(() => {});
     }
@@ -237,7 +278,9 @@ async function handleAdicionarAnexoButton(interaction) {
 
   collector.on("end", async (collected, reason) => {
     if (collected.size === 0 && reason === "time") {
-      await prompt.edit({ content: "⏰ O tempo para enviar o arquivo esgotou." });
+      await prompt.edit({
+        content: "⏰ O tempo para enviar o arquivo esgotou.",
+      });
     }
   });
 }

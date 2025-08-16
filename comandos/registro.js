@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { supabase } = require("../supabaseClient");
 
-// Import handlers for subcommands
 const {
   handleAdicionarCommand,
   handleAdicionarModalSubmit,
@@ -163,7 +162,19 @@ module.exports = {
         .eq("servidor_id", interaction.guild.id)
         .single();
 
-      if (!config && subcommand !== 'adicionar' && subcommand !== 'ver' && subcommand !== 'lembrar' && subcommand !== 'status' && subcommand !== 'exportar' && subcommand !== 'calendario' && subcommand !== 'filtrar' && subcommand !== 'editar' && subcommand !== 'excluir' && subcommand !== 'comentar') {
+      if (
+        !config &&
+        subcommand !== "adicionar" &&
+        subcommand !== "ver" &&
+        subcommand !== "lembrar" &&
+        subcommand !== "status" &&
+        subcommand !== "exportar" &&
+        subcommand !== "calendario" &&
+        subcommand !== "filtrar" &&
+        subcommand !== "editar" &&
+        subcommand !== "excluir" &&
+        subcommand !== "comentar"
+      ) {
         return await interaction.reply({
           content:
             "❌ Este servidor ainda não foi configurado. Um administrador deve usar `/logzito config` primeiro.",
@@ -171,7 +182,20 @@ module.exports = {
         });
       }
 
-      if (config && interaction.channelId !== config.canal_comando && subcommand !== 'adicionar' && subcommand !== 'ver' && subcommand !== 'lembrar' && subcommand !== 'status' && subcommand !== 'exportar' && subcommand !== 'calendario' && subcommand !== 'filtrar' && subcommand !== 'editar' && subcommand !== 'excluir' && subcommand !== 'comentar') {
+      if (
+        config &&
+        interaction.channelId !== config.canal_comando &&
+        subcommand !== "adicionar" &&
+        subcommand !== "ver" &&
+        subcommand !== "lembrar" &&
+        subcommand !== "status" &&
+        subcommand !== "exportar" &&
+        subcommand !== "calendario" &&
+        subcommand !== "filtrar" &&
+        subcommand !== "editar" &&
+        subcommand !== "excluir" &&
+        subcommand !== "comentar"
+      ) {
         return await interaction.reply({
           content: `❌ Este comando só pode ser usado no canal <#${config.canal_comando}>.`,
           ephemeral: true,
@@ -201,7 +225,10 @@ module.exports = {
         return handleCompartilharCommand(interaction);
       case "excluir":
         await interaction.deferReply({ ephemeral: true });
-        return showDeleteConfirmation(interaction, interaction.options.getInteger("id"));
+        return showDeleteConfirmation(
+          interaction,
+          interaction.options.getInteger("id")
+        );
       case "calendario":
         await interaction.deferReply({ ephemeral: true });
         return handleCalendarioCommand(interaction);
@@ -209,7 +236,11 @@ module.exports = {
   },
 
   async handleModal(interaction) {
-    const [_, modalType] = interaction.customId.split("_");
+    const parts = interaction.customId.split("_");
+    let modalType = parts[1];
+    if (modalType === "modal" && parts.length > 2) {
+      modalType = parts[2];
+    }
 
     switch (modalType) {
       case "adicionar":
@@ -241,7 +272,8 @@ module.exports = {
       case "ver": {
         const [_, __, action, entryId] = interaction.customId.split("_");
         if (action === "editar") return showEditModal(interaction, entryId);
-        if (action === "excluir") return showDeleteConfirmation(interaction, entryId);
+        if (action === "excluir")
+          return showDeleteConfirmation(interaction, entryId);
         return handleVerButtonInteraction(interaction);
       }
       case "excluir":

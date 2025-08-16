@@ -1,4 +1,8 @@
-const { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  AttachmentBuilder,
+} = require("discord.js");
 const { supabase } = require("../supabaseClient");
 const { criarEmbed } = require("../utils/embed");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
@@ -7,7 +11,11 @@ const { DateTime } = require("luxon");
 async function gerarGraficoAtividade(entradas) {
   const width = 800;
   const height = 400;
-  const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height, backgroundColour: "#2B2D31" });
+  const chartJSNodeCanvas = new ChartJSNodeCanvas({
+    width,
+    height,
+    backgroundColour: "#2B2D31",
+  });
 
   const hoje = DateTime.now().startOf("day");
   const labels = [];
@@ -16,8 +24,8 @@ async function gerarGraficoAtividade(entradas) {
   for (let i = 6; i >= 0; i--) {
     const dia = hoje.minus({ days: i });
     labels.push(dia.toFormat("dd/MM"));
-    const count = entradas.filter(
-      (e) => DateTime.fromISO(e.data).startOf("day").equals(dia)
+    const count = entradas.filter((e) =>
+      DateTime.fromISO(e.data).startOf("day").equals(dia)
     ).length;
     data.push(count);
   }
@@ -76,7 +84,9 @@ module.exports = {
     .setName("logzito")
     .setDescription("Comandos principais do Logzito")
     .addSubcommand((sub) =>
-      sub.setName("iniciar").setDescription("Inicia seu diário pessoal em um servidor")
+      sub
+        .setName("iniciar")
+        .setDescription("Inicia seu diário pessoal em um servidor")
     )
     .addSubcommand((sub) =>
       sub.setName("status").setDescription("Exibe suas estatísticas do diário")
@@ -125,8 +135,6 @@ module.exports = {
     try {
       const userId = interaction.user.id;
       const comando = interaction.options.getSubcommand();
-
-      // --- Comandos Globais (DM e Servidor) ---
 
       if (comando === "status") {
         await interaction.deferReply({ ephemeral: true });
@@ -181,10 +189,13 @@ module.exports = {
           },
           { name: "🕓 Última entrada", value: `\`${ultima}\``, inline: true }
         );
-        
+
         embed.setImage("attachment://logzito-status.png");
 
-        return await interaction.editReply({ embeds: [embed], files: [attachment] });
+        return await interaction.editReply({
+          embeds: [embed],
+          files: [attachment],
+        });
       }
 
       if (comando === "lembrar") {
@@ -209,43 +220,134 @@ module.exports = {
           });
         }
 
-        const { data, error } = await supabase
-          .from("usuarios_logzito")
-          .upsert({
-            usuario_id: userId,
-            lembrete_ativo: ativar,
-            lembrete_horario: horario,
-            lembrete_fuso: fuso,
-          })
-          .select();
+        try {
+          let data = null;
+          let error = null;
 
-        if (error) {
+          try {
+            const res = await supabase
+              .from("usuarios_logzito")
+              .upsert(
+                {
+                  usuario_id: userId,
+                  lembrete_ativo: ativar,
+                  lembrete_horario: horario,
+                  lembrete_fuso: fuso,
+                },
+                { onConflict: "usuario_id" }
+              )
+              .select();
+
+            if (res.error && res.error.code === "42P10") {
+              const { data: existing } = await supabase
+                .from("usuarios_logzito")
+                .select("*")
+                .eq("usuario_id", userId)
+                .maybeSingle();
+
+              if (existing) {
+                const res2 = await supabase
+                  .from("usuarios_logzito")
+                  .update({
+                    lembrete_ativo: ativar,
+                    lembrete_horario: horario,
+                    lembrete_fuso: fuso,
+                  })
+                  .eq("usuario_id", userId)
+                  .select();
+                data = res2.data;
+                error = res2.error;
+              } else {
+                const res2 = await supabase
+                  .from("usuarios_logzito")
+                  .insert({
+                    usuario_id: userId,
+                    lembrete_ativo: ativar,
+                    lembrete_horario: horario,
+                    lembrete_fuso: fuso,
+                  })
+                  .select();
+                data = res2.data;
+                error = res2.error;
+              }
+            } else {
+              data = res.data;
+              error = res.error;
+            }
+          } catch (upsertErr) {
+            if (upsertErr && upsertErr.code === "42P10") {
+              const { data: existing } = await supabase
+                .from("usuarios_logzito")
+                .select("*")
+                .eq("usuario_id", userId)
+                .maybeSingle();
+
+              if (existing) {
+                const res = await supabase
+                  .from("usuarios_logzito")
+                  .update({
+                    lembrete_ativo: ativar,
+                    lembrete_horario: horario,
+                    lembrete_fuso: fuso,
+                  })
+                  .eq("usuario_id", userId)
+                  .select();
+                data = res.data;
+                error = res.error;
+              } else {
+                const res = await supabase
+                  .from("usuarios_logzito")
+                  .insert({
+                    usuario_id: userId,
+                    lembrete_ativo: ativar,
+                    lembrete_horario: horario,
+                    lembrete_fuso: fuso,
+                  })
+                  .select();
+                data = res.data;
+                error = res.error;
+              }
+            } else {
+              throw upsertErr;
+            }
+          }
+
+          if (error) {
+            console.error("Erro ao atualizar lembrete:", error);
+            return interaction.editReply({
+              content: `❌ Ocorreu um erro ao salvar sua preferência: ${
+                error.message || JSON.stringify(error)
+              }`,
+            });
+          }
+
+          if (!data || (Array.isArray(data) && data.length === 0)) {
+            console.error(
+              "Falha silenciosa ao atualizar lembrete: nenhuma linha atualizada."
+            );
+            return interaction.editReply({
+              content:
+                "❌ Falha ao salvar sua preferência. Verifique as permissões (RLS) da tabela 'usuarios_logzito'. Nenhuma linha foi atualizada.",
+            });
+          }
+
+          const embed = criarEmbed({
+            titulo: ativar
+              ? "🔔 Lembrete Diário Ativado!"
+              : "🔕 Lembrete Diário Desativado",
+            descricao: ativar
+              ? `Você receberá um lembrete para registrar sua atividade todos os dias às **${horario} (${fuso})**.`
+              : "Você não receberá mais o lembrete diário.",
+          });
+
+          return await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
           console.error("Erro ao atualizar lembrete:", error);
           return interaction.editReply({
             content: `❌ Ocorreu um erro ao salvar sua preferência: ${error.message}`,
           });
         }
-
-        if (!data || data.length === 0) {
-          console.error("Falha silenciosa ao atualizar lembrete: nenhuma linha atualizada.");
-          return interaction.editReply({
-              content: "❌ Falha ao salvar sua preferência. Verifique as permissões (RLS) da tabela 'usuarios_logzito'. Nenhuma linha foi atualizada.",
-          });
-        }
-
-        const embed = criarEmbed({
-          titulo: ativar
-            ? "🔔 Lembrete Diário Ativado!"
-            : "🔕 Lembrete Diário Desativado",
-          descricao: ativar
-            ? `Você receberá um lembrete para registrar sua atividade todos os dias às **${horario} (${fuso})**.`
-            : "Você não receberá mais o lembrete diário.",
-        });
-
-        return await interaction.editReply({ embeds: [embed] });
       }
-
-      // --- Comandos Exclusivos de Servidor ---
 
       if (!interaction.guild) {
         return await interaction.reply({
@@ -273,7 +375,7 @@ module.exports = {
         if (
           !canalComandos ||
           !canalCompartilhar ||
-          canalComandos.type !== 0 || // 0 = GuildText
+          canalComandos.type !== 0 ||
           canalCompartilhar.type !== 0
         ) {
           return await interaction.editReply({
@@ -331,9 +433,12 @@ module.exports = {
 
         const { error } = await supabase
           .from("usuarios_logzito")
-          .insert({ usuario_id: userId, servidor_id: interaction.guild.id });
+          .upsert(
+            { usuario_id: userId, servidor_id: interaction.guild.id },
+            { onConflict: "usuario_id" }
+          );
 
-        if (error && error.code !== "23505") { // Ignora erro de usuário já existente
+        if (error && error.code !== "23505") {
           console.error("Erro ao iniciar:", error);
           return await interaction.editReply({
             content: "❌ Erro ao registrar seu usuário. Tente novamente.",
@@ -343,7 +448,7 @@ module.exports = {
         return await interaction.editReply({
           embeds: [
             criarEmbed({
-              titulo: `👋 Olá, ${interaction.user.username}!`, 
+              titulo: `👋 Olá, ${interaction.user.username}!`,
               descricao:
                 `Bem-vindo ao Logzito! Seu diário pessoal de dev está pronto para uso neste servidor.\n\n` +
                 `Use os comandos no canal <#${config.canal_comando}>.`,
